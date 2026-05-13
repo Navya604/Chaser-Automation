@@ -15,7 +15,7 @@ import win32com.client as win32
 # =========================================================
 
 WORKFLOW_SHEET = "Sheet1"
-WCR_SHEET = "Sheet1"
+HELPER_SHEET = "Sheet1"
 CONFIG_SHEET = "Sheet1"
 
 # Workflow columns
@@ -33,9 +33,9 @@ WF_IA_NAME = "IA Name"
 WF_AS = "AS"
 WF_AK = "AK"
 
-# WCR columns
-WCR_FUND_KEY = "Fund UCN"
-WCR_CREDIT_CONTACT = "Credit Contact"
+# Credit Helper columns — used only for Chaser 2
+HELPER_FUND_KEY = "Fund UCN"
+HELPER_CREDIT_CONTACT = "Credit Contact"
 
 # Config columns
 CFG_NAME = "Name"
@@ -66,7 +66,7 @@ FAIL_SHEET = "Fail"
 # =========================================================
 
 workflow_path = ""
-wcr_path = ""
+helper_path = ""
 config_path = ""
 output_folder = ""
 validation_path = ""
@@ -108,6 +108,7 @@ def combine_emails(*values):
 
     for val in values:
         val = normalize_email_string(val)
+
         if val:
             emails.extend([e.strip() for e in val.split(";") if e.strip()])
 
@@ -139,26 +140,6 @@ def info(msg):
 
 def error(msg):
     messagebox.showerror("HF NAV Chaser Automation", msg)
-
-
-def build_email_html(body_text, table_html, signature_html):
-    return f"""
-    <html>
-    <body style="font-family:Calibri, Arial, sans-serif; font-size:11pt;">
-        <p>Dear Team,</p>
-
-        <p>{body_text}</p>
-
-        {table_html}
-
-        <p>Please fill in the required details and revert at your earliest convenience.</p>
-
-        <p>If the information has already been shared, please ignore this request.</p>
-
-        <p>{signature_html}</p>
-    </body>
-    </html>
-    """
 
 
 # =========================================================
@@ -234,13 +215,109 @@ def make_signature(sender_details):
     title = sender_details.get("title", "")
     location = sender_details.get("location", "")
 
-    signature = f"""
+    return f"""
     Best Regards,<br><br>
     <b>{name}</b> | {title} | J.P. Morgan | {location} |<br>
     <a href="mailto:{email}">{email}</a>
     """
 
-    return signature
+
+# =========================================================
+# PROFESSIONAL HTML TABLE
+# =========================================================
+
+def build_professional_table(table_df):
+    html = """
+    <table style="
+        border-collapse: collapse;
+        width: 100%;
+        font-family: Calibri, Arial, sans-serif;
+        font-size: 11pt;
+        margin-top: 10px;
+        margin-bottom: 12px;
+    ">
+        <thead>
+            <tr style="background-color:#1F4E79; color:white;">
+    """
+
+    for col in table_df.columns:
+        html += f"""
+                <th style="
+                    border:1px solid #A6A6A6;
+                    padding:7px;
+                    text-align:center;
+                    font-weight:bold;
+                    white-space:nowrap;
+                ">{col}</th>
+        """
+
+    html += """
+            </tr>
+        </thead>
+        <tbody>
+    """
+
+    for i, (_, row) in enumerate(table_df.iterrows()):
+        bg_color = "#F2F6FA" if i % 2 == 0 else "#FFFFFF"
+
+        html += f'<tr style="background-color:{bg_color};">'
+
+        for col in table_df.columns:
+            value = "" if pd.isna(row[col]) else str(row[col])
+
+            html += f"""
+                <td style="
+                    border:1px solid #A6A6A6;
+                    padding:7px;
+                    text-align:left;
+                    vertical-align:top;
+                ">{value}</td>
+            """
+
+        html += "</tr>"
+
+    html += """
+        </tbody>
+    </table>
+    """
+
+    return html
+
+
+def build_email_html(body_text, table_html, signature_html):
+    return f"""
+    <html>
+    <body style="font-family:Calibri, Arial, sans-serif; font-size:11pt; color:#000000;">
+        <p>Dear Team,</p>
+
+        <p>{body_text}</p>
+
+        {table_html}
+
+        <p>Please fill in the required details and revert at your earliest convenience.</p>
+
+        <p>If the information has already been shared, please ignore this request.</p>
+
+        <p>{signature_html}</p>
+    </body>
+    </html>
+    """
+
+
+# =========================================================
+# GUI CONTROL: ENABLE/DISABLE HELPER FOR CHASER TYPE
+# =========================================================
+
+def on_chaser_type_change(event=None):
+    chaser_type = chaser_type_var.get()
+
+    if chaser_type == "Chaser 1":
+        helper_entry.config(state="disabled")
+        helper_button.config(state="disabled")
+        helper_file_var.set("")
+    else:
+        helper_entry.config(state="normal")
+        helper_button.config(state="normal")
 
 
 # =========================================================
@@ -248,15 +325,11 @@ def make_signature(sender_details):
 # =========================================================
 
 def create_validation_file():
-    global workflow_path, wcr_path, config_path, output_folder, validation_path, config_df_cache
+    global workflow_path, helper_path, config_path, output_folder, validation_path, config_df_cache
 
     try:
         if not workflow_path:
             error("Please select Workflow file.")
-            return
-
-        if not wcr_path:
-            error("Please select WCR report.")
             return
 
         if not config_path:
@@ -275,8 +348,11 @@ def create_validation_file():
             error("Please enter NAV Date.")
             return
 
+        if chaser_type == "Chaser 2" and not helper_path:
+            error("Please select Credit Helper file for Chaser 2.")
+            return
+
         workflow = read_excel(workflow_path, WORKFLOW_SHEET)
-        wcr = read_excel(wcr_path, WCR_SHEET)
         config_df_cache = read_excel(config_path, CONFIG_SHEET)
 
         check_columns(
@@ -302,15 +378,6 @@ def create_validation_file():
             check_columns(workflow, [WF_AS], "Workflow")
 
         check_columns(
-            wcr,
-            [
-                WCR_FUND_KEY,
-                WCR_CREDIT_CONTACT,
-            ],
-            "WCR"
-        )
-
-        check_columns(
             config_df_cache,
             [
                 CFG_NAME,
@@ -322,7 +389,6 @@ def create_validation_file():
             "Config"
         )
 
-        # Clean workflow
         df = workflow.copy()
 
         df[WF_REGION] = df[WF_REGION].apply(normalize_upper)
@@ -347,6 +413,8 @@ def create_validation_file():
                 (df[WF_FREQ] == frequency_type.upper())
             ].copy()
 
+            df_filtered[HELPER_CREDIT_CONTACT] = ""
+
         # =====================================================
         # CHASER 2 FILTERING
         # =====================================================
@@ -359,20 +427,29 @@ def create_validation_file():
                 (df[WF_FREQ] == frequency_type.upper())
             ].copy()
 
+            helper = read_excel(helper_path, HELPER_SHEET)
+
+            check_columns(
+                helper,
+                [
+                    HELPER_FUND_KEY,
+                    HELPER_CREDIT_CONTACT,
+                ],
+                "Credit Helper"
+            )
+
+            df_filtered = df_filtered.merge(
+                helper,
+                left_on=WF_FUND_KEY,
+                right_on=HELPER_FUND_KEY,
+                how="left",
+                suffixes=("_WF", "_HELPER")
+            )
+
         if df_filtered.empty:
             error("No records found after applying filters.")
             return
 
-        # Merge with WCR
-        merged = df_filtered.merge(
-            wcr,
-            left_on=WF_FUND_KEY,
-            right_on=WCR_FUND_KEY,
-            how="left",
-            suffixes=("_WF", "_WCR")
-        )
-
-        # Get internal emails from config
         jpm_nav_email = get_config_email("JPM_NAV")
         hfc_brazil_email = get_config_email("LATAM")
 
@@ -380,58 +457,62 @@ def create_validation_file():
             error("JPM_NAV email is missing in Config file.")
             return
 
-        # Build routing
+        # =====================================================
+        # ROUTING LOGIC
+        # =====================================================
+
         def build_to(row):
             client = normalize_email_string(row.get(WF_CLIENT_CONTACT, ""))
-            credit = normalize_email_string(row.get(WCR_CREDIT_CONTACT, ""))
-
-            if client:
-                return client
-
-            return credit
+            return client
 
         def build_cc(row):
             region = normalize_upper(row.get(WF_REGION, ""))
-            client = normalize_email_string(row.get(WF_CLIENT_CONTACT, ""))
-            credit = normalize_email_string(row.get(WCR_CREDIT_CONTACT, ""))
+            credit = normalize_email_string(row.get(HELPER_CREDIT_CONTACT, ""))
 
             if chaser_type == "Chaser 1":
                 cc = combine_emails(jpm_nav_email)
 
             else:
-                if client:
-                    cc = combine_emails(credit, jpm_nav_email)
-                else:
-                    cc = combine_emails(jpm_nav_email)
+                cc = combine_emails(credit, jpm_nav_email)
 
             if region == "LATAM":
                 cc = combine_emails(cc, hfc_brazil_email)
 
             return cc
 
-        merged["TO_ADDRESS_FINAL"] = merged.apply(build_to, axis=1)
-        merged["CC_ADDRESS_FINAL"] = merged.apply(build_cc, axis=1)
-        merged["CHASER_TYPE"] = chaser_type
-        merged["REQUESTED_NAV_DATE"] = nav_date_input
+        df_filtered["TO_ADDRESS_FINAL"] = df_filtered.apply(build_to, axis=1)
+        df_filtered["CC_ADDRESS_FINAL"] = df_filtered.apply(build_cc, axis=1)
+        df_filtered["CHASER_TYPE"] = chaser_type
+        df_filtered["REQUESTED_NAV_DATE"] = nav_date_input
 
-        # Validation
+        # =====================================================
+        # VALIDATION
+        # =====================================================
+
         def validation_status(row):
-            if not clean_text(row.get(WCR_FUND_KEY, "")):
-                return "FAIL - No WCR Match"
+            client = normalize_email_string(row.get(WF_CLIENT_CONTACT, ""))
+            credit = normalize_email_string(row.get(HELPER_CREDIT_CONTACT, ""))
 
-            if not clean_text(row.get("TO_ADDRESS_FINAL", "")):
-                return "FAIL - Missing To Address"
+            if not client:
+                return "FAIL - Missing Client Contact"
+
+            if chaser_type == "Chaser 2":
+                if not clean_text(row.get(HELPER_FUND_KEY, "")):
+                    return "FAIL - No Credit Helper Match"
+
+                if not credit:
+                    return "FAIL - Missing Credit Contact"
 
             return "PASS"
 
-        merged["VALIDATION_STATUS"] = merged.apply(validation_status, axis=1)
+        df_filtered["VALIDATION_STATUS"] = df_filtered.apply(validation_status, axis=1)
 
         # Email table fields
-        merged["Fund Name"] = merged[WF_FUND_NAME]
-        merged["NAV Date"] = nav_date_input
-        merged["NAV"] = ""
-        merged["MTD"] = ""
-        merged["Comments"] = ""
+        df_filtered["Fund Name"] = df_filtered[WF_FUND_NAME]
+        df_filtered["NAV Date"] = nav_date_input
+        df_filtered["NAV"] = ""
+        df_filtered["MTD"] = ""
+        df_filtered["Comments"] = ""
 
         output_cols = [
             WF_FUND_KEY,
@@ -440,7 +521,7 @@ def create_validation_file():
             WF_REGION,
             WF_FREQ,
             WF_CLIENT_CONTACT,
-            WCR_CREDIT_CONTACT,
+            HELPER_CREDIT_CONTACT,
             "TO_ADDRESS_FINAL",
             "CC_ADDRESS_FINAL",
             "CHASER_TYPE",
@@ -453,8 +534,14 @@ def create_validation_file():
             "Comments",
         ]
 
-        pass_df = merged[merged["VALIDATION_STATUS"] == "PASS"][output_cols].copy()
-        fail_df = merged[merged["VALIDATION_STATUS"] != "PASS"][output_cols].copy()
+        if chaser_type == "Chaser 2":
+            output_cols.insert(6, HELPER_FUND_KEY)
+
+        # remove duplicate columns if any
+        output_cols = list(dict.fromkeys([c for c in output_cols if c in df_filtered.columns]))
+
+        pass_df = df_filtered[df_filtered["VALIDATION_STATUS"] == "PASS"][output_cols].copy()
+        fail_df = df_filtered[df_filtered["VALIDATION_STATUS"] != "PASS"][output_cols].copy()
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         validation_path = os.path.join(output_folder, f"HF_NAV_Validation_{ts}.xlsx")
@@ -555,12 +642,7 @@ def generate_emails():
                 ]
             ].copy()
 
-            table_html = table_df.to_html(
-                index=False,
-                border=1,
-                justify="left"
-            )
-
+            table_html = build_professional_table(table_df)
             signature_html = make_signature(sender_details)
 
             html_body = build_email_html(body, table_html, signature_html)
@@ -658,18 +740,18 @@ def pick_workflow():
         workflow_file_var.set(path)
 
 
-def pick_wcr():
-    global wcr_path
+def pick_helper():
+    global helper_path
 
     path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
 
     if path:
-        wcr_path = path
-        wcr_file_var.set(path)
+        helper_path = path
+        helper_file_var.set(path)
 
 
 def pick_config():
-    global config_path
+    global config_path, config_df_cache
 
     path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
 
@@ -678,7 +760,6 @@ def pick_config():
         config_file_var.set(path)
 
         try:
-            global config_df_cache
             config_df_cache = read_excel(config_path, CONFIG_SHEET)
             load_senders()
         except Exception as e:
@@ -737,7 +818,7 @@ notebook.add(tab3, text="3. Workflow Update")
 # =========================================================
 
 workflow_file_var = tk.StringVar()
-wcr_file_var = tk.StringVar()
+helper_file_var = tk.StringVar()
 config_file_var = tk.StringVar()
 output_folder_var = tk.StringVar()
 
@@ -752,22 +833,26 @@ ttk.Label(frame1, text="Workflow File").grid(row=0, column=0, sticky="w", padx=8
 ttk.Entry(frame1, textvariable=workflow_file_var, width=90).grid(row=0, column=1, padx=8, pady=8)
 ttk.Button(frame1, text="Browse", command=pick_workflow).grid(row=0, column=2, padx=8, pady=8)
 
-ttk.Label(frame1, text="WCR Report").grid(row=1, column=0, sticky="w", padx=8, pady=8)
-ttk.Entry(frame1, textvariable=wcr_file_var, width=90).grid(row=1, column=1, padx=8, pady=8)
-ttk.Button(frame1, text="Browse", command=pick_wcr).grid(row=1, column=2, padx=8, pady=8)
+ttk.Label(frame1, text="Credit Helper File").grid(row=1, column=0, sticky="w", padx=8, pady=8)
+helper_entry = ttk.Entry(frame1, textvariable=helper_file_var, width=90)
+helper_entry.grid(row=1, column=1, padx=8, pady=8)
+helper_button = ttk.Button(frame1, text="Browse", command=pick_helper)
+helper_button.grid(row=1, column=2, padx=8, pady=8)
 
 ttk.Label(frame1, text="Email Config File").grid(row=2, column=0, sticky="w", padx=8, pady=8)
 ttk.Entry(frame1, textvariable=config_file_var, width=90).grid(row=2, column=1, padx=8, pady=8)
 ttk.Button(frame1, text="Browse", command=pick_config).grid(row=2, column=2, padx=8, pady=8)
 
 ttk.Label(frame1, text="Chaser Type").grid(row=3, column=0, sticky="w", padx=8, pady=8)
-ttk.Combobox(
+chaser_dropdown = ttk.Combobox(
     frame1,
     textvariable=chaser_type_var,
     values=["Chaser 1", "Chaser 2"],
     state="readonly",
     width=30
-).grid(row=3, column=1, sticky="w", padx=8, pady=8)
+)
+chaser_dropdown.grid(row=3, column=1, sticky="w", padx=8, pady=8)
+chaser_dropdown.bind("<<ComboboxSelected>>", on_chaser_type_change)
 
 ttk.Label(frame1, text="Frequency").grid(row=4, column=0, sticky="w", padx=8, pady=8)
 ttk.Combobox(
@@ -788,6 +873,8 @@ ttk.Button(frame1, text="Browse", command=pick_output_folder).grid(row=6, column
 ttk.Button(frame1, text="Validate", command=create_validation_file).grid(
     row=7, column=1, sticky="w", padx=8, pady=15
 )
+
+on_chaser_type_change()
 
 
 # =========================================================
@@ -827,26 +914,9 @@ ttk.Label(frame2, text="Send Mode").grid(row=4, column=0, sticky="w", padx=8, pa
 mode_frame = ttk.Frame(frame2)
 mode_frame.grid(row=4, column=1, sticky="w", padx=8, pady=8)
 
-ttk.Radiobutton(
-    mode_frame,
-    text="Draft Mode",
-    variable=send_mode_var,
-    value="DRAFT"
-).pack(side="left", padx=5)
-
-ttk.Radiobutton(
-    mode_frame,
-    text="Auto Send",
-    variable=send_mode_var,
-    value="AUTO"
-).pack(side="left", padx=5)
-
-ttk.Radiobutton(
-    mode_frame,
-    text="Review Confirm Send",
-    variable=send_mode_var,
-    value="REVIEW"
-).pack(side="left", padx=5)
+ttk.Radiobutton(mode_frame, text="Draft Mode", variable=send_mode_var, value="DRAFT").pack(side="left", padx=5)
+ttk.Radiobutton(mode_frame, text="Auto Send", variable=send_mode_var, value="AUTO").pack(side="left", padx=5)
+ttk.Radiobutton(mode_frame, text="Review Confirm Send", variable=send_mode_var, value="REVIEW").pack(side="left", padx=5)
 
 ttk.Button(frame2, text="Generate Emails", command=generate_emails).grid(
     row=5, column=1, sticky="w", padx=8, pady=15
