@@ -41,12 +41,21 @@ WCR_CREDIT_CONTACT = "Credit Contact"
 CFG_NAME = "Name"
 CFG_EMAIL = "Email"
 CFG_TYPE = "Type"
+CFG_TITLE = "Title"
+CFG_LOCATION = "Location"
 
-# Values
+# Filter values
 ALLOWED_REGIONS = ["NAHF", "LATAM"]
 NAV_BUCKET_ALLOWED = ["1-10", "11-30"]
 MTD_BUCKET_ALLOWED = ["1-10"]
-COVERAGE_EXCLUDE = ["BLOOMBERG", "PYTHON", "DAY NAV 2", "PYTHON WEB", "PYTHON - WEB"]
+
+COVERAGE_EXCLUDE = [
+    "BLOOMBERG",
+    "PYTHON",
+    "DAY NAV 2",
+    "PYTHON WEB",
+    "PYTHON - WEB"
+]
 
 PASS_SHEET = "Pass"
 FAIL_SHEET = "Fail"
@@ -84,11 +93,13 @@ def today_str():
 
 def normalize_email_string(value):
     text = clean_text(value)
+
     if not text:
         return ""
 
     parts = re.split(r"[;,]+", text)
     parts = [p.strip() for p in parts if p.strip()]
+
     return "; ".join(parts)
 
 
@@ -130,13 +141,6 @@ def error(msg):
     messagebox.showerror("HF NAV Chaser Automation", msg)
 
 
-def make_signature(sender_name):
-    return f"""
-    Best Regards,<br>
-    {sender_name}
-    """
-
-
 def build_email_html(body_text, table_html, signature_html):
     return f"""
     <html>
@@ -164,7 +168,9 @@ def build_email_html(body_text, table_html, signature_html):
 def get_config_email(email_type):
     global config_df_cache
 
-    rows = config_df_cache[config_df_cache[CFG_TYPE].astype(str).str.upper() == email_type.upper()]
+    rows = config_df_cache[
+        config_df_cache[CFG_TYPE].astype(str).str.upper() == email_type.upper()
+    ]
 
     if rows.empty:
         return ""
@@ -175,21 +181,66 @@ def get_config_email(email_type):
 def load_senders():
     global config_df_cache
 
-    if config_df_cache.empty and config_path:
-        config_df_cache = read_excel(config_path, CONFIG_SHEET)
+    try:
+        if config_df_cache.empty and config_path:
+            config_df_cache = read_excel(config_path, CONFIG_SHEET)
 
-    sender_rows = config_df_cache[config_df_cache[CFG_TYPE].astype(str).str.upper() == "SENDER"]
+        sender_rows = config_df_cache[
+            config_df_cache[CFG_TYPE].astype(str).str.upper() == "SENDER"
+        ]
 
-    sender_names = sender_rows[CFG_NAME].dropna().astype(str).tolist()
+        sender_names = sender_rows[CFG_NAME].dropna().astype(str).tolist()
 
-    sender_dropdown["values"] = sender_names
+        sender_dropdown["values"] = sender_names
 
-    if sender_names:
-        sender_var.set(sender_names[0])
+        if sender_names:
+            sender_var.set(sender_names[0])
+
+    except Exception:
+        pass
 
 
-def get_selected_sender_name():
-    return clean_text(sender_var.get())
+def get_selected_sender_details():
+    global config_df_cache
+
+    selected_name = clean_text(sender_var.get())
+
+    sender_rows = config_df_cache[
+        (config_df_cache[CFG_TYPE].astype(str).str.upper() == "SENDER") &
+        (config_df_cache[CFG_NAME].astype(str).str.strip() == selected_name)
+    ]
+
+    if sender_rows.empty:
+        return {
+            "name": selected_name,
+            "email": "",
+            "title": "",
+            "location": ""
+        }
+
+    row = sender_rows.iloc[0]
+
+    return {
+        "name": clean_text(row.get(CFG_NAME, "")),
+        "email": clean_text(row.get(CFG_EMAIL, "")),
+        "title": clean_text(row.get(CFG_TITLE, "")),
+        "location": clean_text(row.get(CFG_LOCATION, ""))
+    }
+
+
+def make_signature(sender_details):
+    name = sender_details.get("name", "")
+    email = sender_details.get("email", "")
+    title = sender_details.get("title", "")
+    location = sender_details.get("location", "")
+
+    signature = f"""
+    Best Regards,<br><br>
+    <b>{name}</b> | {title} | J.P. Morgan | {location} |<br>
+    <a href="mailto:{email}">{email}</a>
+    """
+
+    return signature
 
 
 # =========================================================
@@ -265,11 +316,13 @@ def create_validation_file():
                 CFG_NAME,
                 CFG_EMAIL,
                 CFG_TYPE,
+                CFG_TITLE,
+                CFG_LOCATION,
             ],
             "Config"
         )
 
-        # Clean workflow columns
+        # Clean workflow
         df = workflow.copy()
 
         df[WF_REGION] = df[WF_REGION].apply(normalize_upper)
@@ -319,6 +372,7 @@ def create_validation_file():
             suffixes=("_WF", "_WCR")
         )
 
+        # Get internal emails from config
         jpm_nav_email = get_config_email("JPM_NAV")
         hfc_brazil_email = get_config_email("LATAM")
 
@@ -333,6 +387,7 @@ def create_validation_file():
 
             if client:
                 return client
+
             return credit
 
         def build_cc(row):
@@ -340,18 +395,15 @@ def create_validation_file():
             client = normalize_email_string(row.get(WF_CLIENT_CONTACT, ""))
             credit = normalize_email_string(row.get(WCR_CREDIT_CONTACT, ""))
 
-            # Chaser 1
             if chaser_type == "Chaser 1":
                 cc = combine_emails(jpm_nav_email)
 
-            # Chaser 2
             else:
                 if client:
                     cc = combine_emails(credit, jpm_nav_email)
                 else:
                     cc = combine_emails(jpm_nav_email)
 
-            # LATAM rule
             if region == "LATAM":
                 cc = combine_emails(cc, hfc_brazil_email)
 
@@ -454,7 +506,8 @@ def generate_emails():
 
         subject = subject_text.get("1.0", "end").strip()
         body = body_text.get("1.0", "end").strip()
-        sender_name = get_selected_sender_name()
+        sender_details = get_selected_sender_details()
+        sender_name = sender_details["name"]
         send_mode = send_mode_var.get()
 
         if not sender_name:
@@ -508,7 +561,7 @@ def generate_emails():
                 justify="left"
             )
 
-            signature_html = make_signature(sender_name)
+            signature_html = make_signature(sender_details)
 
             html_body = build_email_html(body, table_html, signature_html)
 
@@ -520,6 +573,7 @@ def generate_emails():
 
             if send_mode == "AUTO":
                 mail.Send()
+
             elif send_mode == "REVIEW":
                 mail.Display()
                 answer = input(f"Send email to {to_addr}? Y/N: ").strip().upper()
@@ -528,6 +582,7 @@ def generate_emails():
                     mail.Send()
                 else:
                     mail.Save()
+
             else:
                 mail.Save()
 
@@ -595,7 +650,9 @@ def update_ak():
 
 def pick_workflow():
     global workflow_path
+
     path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+
     if path:
         workflow_path = path
         workflow_file_var.set(path)
@@ -603,7 +660,9 @@ def pick_workflow():
 
 def pick_wcr():
     global wcr_path
+
     path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+
     if path:
         wcr_path = path
         wcr_file_var.set(path)
@@ -611,16 +670,26 @@ def pick_wcr():
 
 def pick_config():
     global config_path
+
     path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+
     if path:
         config_path = path
         config_file_var.set(path)
-        load_senders()
+
+        try:
+            global config_df_cache
+            config_df_cache = read_excel(config_path, CONFIG_SHEET)
+            load_senders()
+        except Exception as e:
+            error(f"Failed to load config file:\n\n{e}")
 
 
 def pick_output_folder():
     global output_folder
+
     path = filedialog.askdirectory()
+
     if path:
         output_folder = path
         output_folder_var.set(path)
@@ -628,7 +697,9 @@ def pick_output_folder():
 
 def pick_validation():
     global validation_path
+
     path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+
     if path:
         validation_path = path
         validation_file_var.set(path)
@@ -636,6 +707,7 @@ def pick_validation():
 
 def pick_workflow_update():
     path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+
     if path:
         workflow_update_var.set(path)
 
@@ -755,9 +827,26 @@ ttk.Label(frame2, text="Send Mode").grid(row=4, column=0, sticky="w", padx=8, pa
 mode_frame = ttk.Frame(frame2)
 mode_frame.grid(row=4, column=1, sticky="w", padx=8, pady=8)
 
-ttk.Radiobutton(mode_frame, text="Draft Mode", variable=send_mode_var, value="DRAFT").pack(side="left", padx=5)
-ttk.Radiobutton(mode_frame, text="Auto Send", variable=send_mode_var, value="AUTO").pack(side="left", padx=5)
-ttk.Radiobutton(mode_frame, text="Review Confirm Send", variable=send_mode_var, value="REVIEW").pack(side="left", padx=5)
+ttk.Radiobutton(
+    mode_frame,
+    text="Draft Mode",
+    variable=send_mode_var,
+    value="DRAFT"
+).pack(side="left", padx=5)
+
+ttk.Radiobutton(
+    mode_frame,
+    text="Auto Send",
+    variable=send_mode_var,
+    value="AUTO"
+).pack(side="left", padx=5)
+
+ttk.Radiobutton(
+    mode_frame,
+    text="Review Confirm Send",
+    variable=send_mode_var,
+    value="REVIEW"
+).pack(side="left", padx=5)
 
 ttk.Button(frame2, text="Generate Emails", command=generate_emails).grid(
     row=5, column=1, sticky="w", padx=8, pady=15
