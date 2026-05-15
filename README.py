@@ -1844,3 +1844,58 @@ ttk.Button(
 )
 
 root.mainloop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# =====================================================
+# CLEAN VALIDATION COLUMNS
+# =====================================================
+
+required_columns = [
+
+    WF_FUND_KEY,
+    WF_FUND_NAME,
+    WF_IA_NAME,
+    WF_REGION,
+    WF_FREQ,
+
+    "Fund Name",
+    "NAV Date",
+    "NAV",
+    "MTD",
+    "Comments",
+
+    "TO_ADDRESS_FINAL",
+    "CC_ADDRESS_FINAL",
+
+    "VALIDATION_STATUS"
+]
+
+# =====================================================
+# PASS SHEET
+# =====================================================
+
+pass_df = df_filtered[
+    df_filtered["VALIDATION_STATUS"] == "PASS"
+][required_columns].copy()
+
+# =====================================================
+# FAIL SHEET
+# =====================================================
+
+fail_df = df_filtered[
+    df_filtered["VALIDATION_STATUS"] != "PASS"
+][required_columns].copy()
