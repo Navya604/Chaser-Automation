@@ -1899,3 +1899,235 @@ pass_df = df_filtered[
 fail_df = df_filtered[
     df_filtered["VALIDATION_STATUS"] != "PASS"
 ][required_columns].copy()
+
+
+
+
+
+
+
+
+# =========================================================
+# GUI - PROFESSIONAL DESIGN
+# =========================================================
+
+root = tk.Tk()
+root.title("HF NAV Chaser Automation")
+root.geometry("1180x820")
+root.configure(bg="#F4F6F8")
+
+style = ttk.Style()
+style.theme_use("clam")
+
+style.configure("TNotebook", background="#F4F6F8", borderwidth=0)
+style.configure(
+    "TNotebook.Tab",
+    font=("Segoe UI", 10, "bold"),
+    padding=[18, 8],
+    background="#D9E2EC",
+    foreground="#1F2937"
+)
+style.map(
+    "TNotebook.Tab",
+    background=[("selected", "#1F4E79")],
+    foreground=[("selected", "white")]
+)
+
+style.configure("TLabelframe", background="#FFFFFF", borderwidth=1, relief="solid")
+style.configure(
+    "TLabelframe.Label",
+    font=("Segoe UI", 11, "bold"),
+    foreground="#1F4E79",
+    background="#FFFFFF"
+)
+style.configure("TLabel", font=("Segoe UI", 10), background="#FFFFFF", foreground="#1F2937")
+style.configure("TEntry", font=("Segoe UI", 10), padding=5)
+style.configure("TCombobox", font=("Segoe UI", 10), padding=5)
+style.configure("TButton", font=("Segoe UI", 10, "bold"), padding=[14, 6])
+style.configure("Primary.TButton", background="#1F4E79", foreground="white")
+style.map("Primary.TButton", background=[("active", "#163B5C")])
+
+header = tk.Frame(root, bg="#1F4E79", height=76)
+header.pack(fill="x")
+
+tk.Label(
+    header,
+    text="HF NAV Chaser Automation",
+    bg="#1F4E79",
+    fg="white",
+    font=("Segoe UI", 21, "bold")
+).pack(anchor="w", padx=26, pady=(12, 0))
+
+tk.Label(
+    header,
+    text="Workflow Filtering  |  Credit Helper Validation  |  Outlook Email Drafting  |  AK Status Update",
+    bg="#1F4E79",
+    fg="#DCEAF7",
+    font=("Segoe UI", 10)
+).pack(anchor="w", padx=28, pady=(0, 10))
+
+notebook = ttk.Notebook(root)
+notebook.pack(fill="both", expand=True, padx=25, pady=20)
+
+tab1 = ttk.Frame(notebook)
+tab2 = ttk.Frame(notebook)
+tab3 = ttk.Frame(notebook)
+
+notebook.add(tab1, text="1. Validation")
+notebook.add(tab2, text="2. Generate Email")
+notebook.add(tab3, text="3. Workflow Update")
+
+
+# =========================================================
+# TAB 1
+# =========================================================
+
+workflow_file_var = tk.StringVar()
+helper_file_var = tk.StringVar()
+config_file_var = tk.StringVar()
+output_folder_var = tk.StringVar()
+
+chaser_type_var = tk.StringVar(value="Chaser 1")
+frequency_var = tk.StringVar(value="Monthly")
+nav_date_var = tk.StringVar()
+
+frame1 = ttk.LabelFrame(tab1, text="Step 1: Validation Setup")
+frame1.pack(fill="x", padx=18, pady=18, ipadx=10, ipady=10)
+
+ttk.Label(frame1, text="Workflow File").grid(row=0, column=0, sticky="w", padx=12, pady=10)
+ttk.Entry(frame1, textvariable=workflow_file_var, width=88).grid(row=0, column=1, padx=8, pady=10)
+ttk.Button(frame1, text="Browse Workflow", command=pick_workflow, style="Primary.TButton").grid(row=0, column=2, padx=10, pady=10)
+
+ttk.Label(frame1, text="Credit Helper File").grid(row=1, column=0, sticky="w", padx=12, pady=10)
+helper_entry = ttk.Entry(frame1, textvariable=helper_file_var, width=88)
+helper_entry.grid(row=1, column=1, padx=8, pady=10)
+helper_button = ttk.Button(frame1, text="Browse Helper", command=pick_helper, style="Primary.TButton")
+helper_button.grid(row=1, column=2, padx=10, pady=10)
+
+ttk.Label(frame1, text="Email Config File").grid(row=2, column=0, sticky="w", padx=12, pady=10)
+ttk.Entry(frame1, textvariable=config_file_var, width=88).grid(row=2, column=1, padx=8, pady=10)
+ttk.Button(frame1, text="Browse Config", command=pick_config, style="Primary.TButton").grid(row=2, column=2, padx=10, pady=10)
+
+ttk.Label(frame1, text="Chaser Type").grid(row=3, column=0, sticky="w", padx=12, pady=10)
+chaser_dropdown = ttk.Combobox(
+    frame1,
+    textvariable=chaser_type_var,
+    values=["Chaser 1", "Chaser 2"],
+    state="readonly",
+    width=32
+)
+chaser_dropdown.grid(row=3, column=1, sticky="w", padx=8, pady=10)
+chaser_dropdown.bind("<<ComboboxSelected>>", on_chaser_type_change)
+
+ttk.Label(frame1, text="Frequency").grid(row=4, column=0, sticky="w", padx=12, pady=10)
+ttk.Combobox(
+    frame1,
+    textvariable=frequency_var,
+    values=["Monthly", "Quarterly"],
+    state="readonly",
+    width=32
+).grid(row=4, column=1, sticky="w", padx=8, pady=10)
+
+ttk.Label(frame1, text="NAV Date").grid(row=5, column=0, sticky="w", padx=12, pady=10)
+ttk.Entry(frame1, textvariable=nav_date_var, width=35).grid(row=5, column=1, sticky="w", padx=8, pady=10)
+
+ttk.Label(frame1, text="Output Folder").grid(row=6, column=0, sticky="w", padx=12, pady=10)
+ttk.Entry(frame1, textvariable=output_folder_var, width=88).grid(row=6, column=1, padx=8, pady=10)
+ttk.Button(frame1, text="Browse Output", command=pick_output_folder, style="Primary.TButton").grid(row=6, column=2, padx=10, pady=10)
+
+ttk.Button(
+    frame1,
+    text="Generate Validation File",
+    command=create_validation_file,
+    style="Primary.TButton"
+).grid(row=7, column=1, sticky="w", padx=8, pady=18)
+
+on_chaser_type_change()
+
+
+# =========================================================
+# TAB 2
+# =========================================================
+
+validation_file_var = tk.StringVar()
+sender_var = tk.StringVar()
+send_mode_var = tk.StringVar(value="DRAFT")
+
+frame2 = ttk.LabelFrame(tab2, text="Step 2: Generate Outlook Emails")
+frame2.pack(fill="both", expand=True, padx=18, pady=18, ipadx=10, ipady=10)
+
+ttk.Label(frame2, text="Validation File").grid(row=0, column=0, sticky="w", padx=12, pady=10)
+ttk.Entry(frame2, textvariable=validation_file_var, width=88).grid(row=0, column=1, padx=8, pady=10)
+ttk.Button(frame2, text="Browse Validation", command=pick_validation, style="Primary.TButton").grid(row=0, column=2, padx=10, pady=10)
+
+ttk.Label(frame2, text="Sender Name").grid(row=1, column=0, sticky="w", padx=12, pady=10)
+sender_dropdown = ttk.Combobox(frame2, textvariable=sender_var, state="readonly", width=42)
+sender_dropdown.grid(row=1, column=1, sticky="w", padx=8, pady=10)
+
+ttk.Label(frame2, text="Subject").grid(row=2, column=0, sticky="nw", padx=12, pady=10)
+subject_text = tk.Text(frame2, height=2, width=78, font=("Segoe UI", 10), relief="solid", borderwidth=1)
+subject_text.grid(row=2, column=1, padx=8, pady=10, sticky="w")
+subject_text.insert("1.0", "NAV / AUM Request")
+
+ttk.Label(frame2, text="Body").grid(row=3, column=0, sticky="nw", padx=12, pady=10)
+body_text = tk.Text(frame2, height=7, width=78, font=("Segoe UI", 10), relief="solid", borderwidth=1)
+body_text.grid(row=3, column=1, padx=8, pady=10, sticky="w")
+body_text.insert(
+    "1.0",
+    "We kindly request you to provide the latest NAV and performance details for the below funds."
+)
+
+ttk.Label(frame2, text="Send Mode").grid(row=4, column=0, sticky="w", padx=12, pady=10)
+mode_frame = tk.Frame(frame2, bg="#FFFFFF")
+mode_frame.grid(row=4, column=1, sticky="w", padx=8, pady=10)
+
+ttk.Radiobutton(mode_frame, text="Draft Mode", variable=send_mode_var, value="DRAFT").pack(side="left", padx=8)
+ttk.Radiobutton(mode_frame, text="Auto Send", variable=send_mode_var, value="AUTO").pack(side="left", padx=8)
+ttk.Radiobutton(mode_frame, text="Review & Bulk Send", variable=send_mode_var, value="REVIEW").pack(side="left", padx=8)
+
+ttk.Button(
+    frame2,
+    text="Generate Emails",
+    command=generate_emails,
+    style="Primary.TButton"
+).grid(row=5, column=1, sticky="w", padx=8, pady=18)
+
+
+# =========================================================
+# TAB 3
+# =========================================================
+
+workflow_update_var = tk.StringVar()
+
+frame3 = ttk.LabelFrame(tab3, text="Step 3: Workflow AK Update")
+frame3.pack(fill="both", expand=True, padx=18, pady=18, ipadx=10, ipady=10)
+
+ttk.Label(frame3, text="Workflow File").grid(row=0, column=0, sticky="w", padx=12, pady=10)
+ttk.Entry(frame3, textvariable=workflow_update_var, width=88).grid(row=0, column=1, padx=8, pady=10)
+ttk.Button(frame3, text="Browse Workflow", command=pick_workflow_update, style="Primary.TButton").grid(row=0, column=2, padx=10, pady=10)
+
+ttk.Label(frame3, text="Comment Text").grid(row=1, column=0, sticky="nw", padx=12, pady=10)
+comment_text = tk.Text(frame3, height=6, width=78, font=("Segoe UI", 10), relief="solid", borderwidth=1)
+comment_text.grid(row=1, column=1, padx=8, pady=10, sticky="w")
+
+ttk.Button(
+    frame3,
+    text="Update AK Status",
+    command=update_ak,
+    style="Primary.TButton"
+).grid(row=2, column=1, sticky="w", padx=8, pady=18)
+
+root.mainloop()
+
+
+
+
+
+
+
+
+
+
+
+
+
