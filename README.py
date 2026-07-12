@@ -2124,6 +2124,122 @@ root.mainloop()
 
 
 
+No, you do not need to change a lot of code. This is a small structural change.
+
+The main change is:
+
+Before:
+Client Contact → Workflow
+
+Now:
+Client Contact → Helper File
+Credit Contact → Helper File
+
+So for both Chaser 1 and Chaser 2, the helper file will now be needed.
+
+What changes
+Helper file should contain
+Fund UCN	Fund Name	Client Contact	Credit Contact
+New routing
+
+Chaser 1
+
+To = Client Contact from Helper
+CC = JPM NAV
+LATAM also adds HFC Brazil
+
+Chaser 2
+
+To = Client Contact from Helper
+CC = Credit Contact from Helper + JPM NAV
+LATAM also adds HFC Brazil
+
+If Client Contact is blank, the record goes to Fail and no email is drafted.
+
+Code changes needed
+
+At the top, add:
+
+HELPER_CLIENT_CONTACT = "Client Contact"
+
+You can remove or stop using:
+
+WF_CLIENT_CONTACT = "Client Contact"
+
+The helper file should no longer fade out for Chaser 1, because it is required for both chasers.
+
+Replace the GUI logic with:
+
+def on_chaser_type_change(event=None):
+    helper_entry.config(state="normal")
+    helper_button.config(state="normal")
+
+Or remove that function entirely and always keep the helper field enabled.
+
+In validation, require Helper for both:
+
+if not helper_path:
+    error("Please select Helper file.")
+    return
+
+Read and merge Helper before applying routing:
+
+helper = read_excel(
+    helper_path,
+    HELPER_SHEET
+)
+
+helper.columns = helper.columns.astype(str).str.strip()
+
+check_columns(
+    helper,
+    [
+        HELPER_FUND_KEY,
+        HELPER_CLIENT_CONTACT,
+        HELPER_CREDIT_CONTACT,
+    ],
+    "Helper"
+)
+
+df_filtered = df_filtered.merge(
+    helper,
+    left_on=WF_FUND_KEY,
+    right_on=HELPER_FUND_KEY,
+    how="left",
+    suffixes=("", "_HELPER")
+)
+
+Change build_to() from Workflow contact to Helper contact:
+
+def build_to(row):
+    return normalize_email_string(
+        row.get(HELPER_CLIENT_CONTACT, "")
+    )
+
+Change validation:
+
+def validation_status(row):
+    client = normalize_email_string(
+        row.get(HELPER_CLIENT_CONTACT, "")
+    )
+
+    credit = normalize_email_string(
+        row.get(HELPER_CREDIT_CONTACT, "")
+    )
+
+    if not clean_text(row.get(HELPER_FUND_KEY, "")):
+        return "FAIL - No Helper Match"
+
+    if not client:
+        return "FAIL - Missing Client Contact"
+
+    if chaser_type == "Chaser 2" and not credit:
+        return "FAIL - Missing Credit Contact"
+
+    return "PASS"
+
+
+
 
 
 
