@@ -2247,3 +2247,49 @@ def validation_status(row):
 
 
 
+
+
+
+# HF NAV Chaser Automation
+
+## Problem Statement
+
+The NAV Chaser process is a recurring monthly activity performed to request outstanding NAV and performance information from clients. Previously, the process involved multiple manual steps, including reviewing the workflow, identifying eligible funds based on business rules, validating client and credit contact information, preparing Outlook email drafts, and updating workflow comments. As the number of funds increased, this manual approach became repetitive, time-consuming, and prone to operational errors and inconsistencies.
+
+---
+
+## Solution
+
+To improve operational efficiency, a Python-based automation tool was developed to streamline the NAV Chaser process. The solution automatically reads the Workflow, Helper, and Configuration files, applies predefined business rules to identify eligible funds, validates the required contact information, generates standardized Outlook email drafts, and updates workflow comments. The tool is designed with a simple graphical user interface (GUI), allowing users to execute the complete process without requiring any programming knowledge.
+
+---
+
+## Business Impact
+
+The automation significantly reduces manual intervention by automating repetitive tasks involved in the NAV Chaser process. It standardizes client communication, improves consistency across the workflow, minimizes operational risk, and enables users to complete the monthly chaser activity more efficiently. The modular design also provides flexibility for future business enhancements without impacting the existing process.
+
+---
+
+## Key Advantages
+
+* Automates the end-to-end NAV Chaser process using Python.
+* Reduces manual processing time from approximately **10–15 minutes per fund to under 1 minute per fund**.
+* Applies business rules automatically to identify funds requiring a chaser.
+* Validates client and credit contact information before email generation.
+* Generates standardized Outlook email drafts with consistent formatting.
+* Automatically updates workflow comments after the chaser process.
+* Reduces manual errors and improves data accuracy.
+* Provides a simple, user-friendly GUI requiring no programming knowledge.
+* Supports future enhancements through a scalable and maintainable design.
+
+---
+
+## Technology Used
+
+**Python | Pandas | Tkinter GUI | Microsoft Outlook Integration | Excel-Based Workflow Automation**
+
+---
+
+This version is concise, professional, and fits well into a single-page Word document while focusing on the **problem, solution, business impact, and benefits**, which aligns with what your manager requested.
+
+
